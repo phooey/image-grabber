@@ -5,6 +5,6 @@ Generic "imagegrabber" python module for parsing text e.g. in an IRC logfile for
 
 Example usage:
 --------------
-python fatpita_parser.py -t "(13:37:00) (@phooey) http://fatpita.net/?i=4995" pictures/
-python fatpita_parser.py -f data/irc.log pictures/
-python fatpita_parser.py -f data/huge_irc.log pictures/ -n 4
+    python fatpita_parser.py -t "(13:37:00) (@phooey) http://fatpita.net/?i=4995" pictures/
+    python fatpita_parser.py -f data/irc.log pictures/
+    python fatpita_parser.py -f data/huge_irc.log pictures/ -n 4
