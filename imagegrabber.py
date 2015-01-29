@@ -1,4 +1,5 @@
 ﻿import threading
+import time
 from contextlib import closing
 from HTMLParser import HTMLParser, HTMLParseError
 from urllib import urlretrieve, ContentTooShortError
@@ -45,7 +46,7 @@ class ParseThread(threading.Thread):
     def __init__(self, number, image_parser, page_url_queue, image_url_queue,
                  print_queue):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon = True
         self.number = number
         self.page_url_queue = page_url_queue
         self.image_url_queue = image_url_queue
@@ -54,13 +55,17 @@ class ParseThread(threading.Thread):
 
     def run(self):
         self.print_queue.put("Parse Thread %d running" % self.number)
-        while True:
+        self.running = True
+        while self.running:
             page_url = self.page_url_queue.get()
             html_data = self.__read_page(page_url)
             image_url = self.__find_image_url(html_data, page_url)
             if image_url:
                 self.image_url_queue.put(image_url)
             self.page_url_queue.task_done()
+
+    def stop(self):
+        self.running = False
 
     def __read_page(self, page_url):
         self.print_queue.put('Opening page: %s' % page_url)
@@ -97,15 +102,19 @@ class PrintThread(threading.Thread):
 
     def __init__(self, message_queue):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon = True
         self.message_queue = message_queue
 
     def run(self):
         self.message_queue.put("PrintThread running")
-        while True:
+        self.running = True
+        while self.running:
             message = self.message_queue.get()
             print(message)
             self.message_queue.task_done()
+
+    def stop(self):
+        self.running = False
 
 class DownloadThread(threading.Thread):
     """
@@ -116,7 +125,7 @@ class DownloadThread(threading.Thread):
 
     def __init__(self, number, dl_path, image_url_queue, print_queue):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon = True
         self.number = number
         self.image_url_queue = image_url_queue
         self.dl_path = dl_path
@@ -124,10 +133,14 @@ class DownloadThread(threading.Thread):
 
     def run(self):
         self.print_queue.put("Download Thread %d running" % self.number)
-        while True:
+        self.running = True
+        while self.running:
             filename = self.image_url_queue.get()
             self.__download_image(filename)
             self.image_url_queue.task_done()
+
+    def stop(self):
+        self.running = False
 
     def __download_image(self, image_url):
         try:
@@ -153,11 +166,12 @@ class ImageGrabber():
     def __init__(self, download_path):
         self.download_path = download_path
 
-        self.page_url_queue = Queue()
-        self.image_download_queue = Queue()
-        self.print_queue = Queue()
+        self.queues = [Queue(), Queue(), Queue()]
+        self.page_url_queue, self.image_download_queue, self.print_queue = \
+            self.queues
 
         self.print_thread = PrintThread(self.print_queue)
+        self.threads = [self.print_thread]
         self.print_thread.start()
 
     def grab_images(self, urllist, image_parser, nr_threads):
@@ -175,14 +189,27 @@ class ImageGrabber():
         for i in range(nr_threads):
             download_thread = DownloadThread(i, self.download_path,
                 self.image_download_queue, self.print_queue)
-            download_thread.start()
             parse_thread = ParseThread(i, image_parser(), self.page_url_queue,
                 self.image_download_queue, self.print_queue)
+
+            self.threads.extend([download_thread, parse_thread])
+
+            download_thread.start()
             parse_thread.start()
 
         for url in urllist:
             self.page_url_queue.put(url)
 
-        self.page_url_queue.join()
-        self.image_download_queue.join()
-        self.print_queue.join()
+        try:
+            while self.queues:
+                for queue in list(self.queues): # Loop over copy for deletion
+                    if queue.empty():
+                        self.queues.remove(queue)
+                    else:
+                        time.sleep(1)
+
+        except KeyboardInterrupt:
+            print("Ctrl-C received, stopping threads and exiting...")
+            for thread in self.threads:
+                thread.stop()
+
