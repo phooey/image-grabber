@@ -99,3 +99,9 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# Local files
+# =========================
+data/
+pictures/
+*.bat

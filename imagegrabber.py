@@ -207,9 +207,9 @@ class ImageGrabber():
                         self.queues.remove(queue)
                     else:
                         time.sleep(1)
-
         except KeyboardInterrupt:
             print("Ctrl-C received, stopping threads and exiting...")
             for thread in self.threads:
                 thread.stop()
-
+            for thread in self.threads:
+                thread.join()
